@@ -2,12 +2,14 @@
 
 #include "global.h"
 #include "event_object_movement.h"
+#include "event_scripts.h"
 #include "international_string_util.h"
 #include "item.h"
 #include "list_menu.h"
 #include "main.h"
 #include "map_name_popup.h"
 #include "menu.h"
+#include "pokemon_storage_system.h"
 #include "script.h"
 #include "script_pokemon_util.h"
 #include "sound.h"
@@ -26,9 +28,19 @@
 void Debug_ShowMainMenu(void);
 
 static void Debug_DestroyMainMenu(u8);
+
 static void DebugAction_Flags(u8 taskId);
+static void Flags_SelectFlag(u8 taskId);
+static void Flags_ToggleFlag(u8 taskId);
+
 static void DebugAction_Variables(u8 taskId);
+static void Variables_SelectVariable(u8 taskId);
+static void Variables_SetVariableValue(u8 taskId);
+
 static void DebugAction_WarpToMap(u8 taskId);
+static void WarpToMap_SelectMapBank(u8 taskId);
+static void WarpToMap_SelectMap(u8 taskId);
+static void WarpToMap_SelectWarp(u8 taskId);
 
 static void DebugAction_GiveItem(u8 taskId);
 static void GiveItem_SelectItemId(u8 taskId);
@@ -36,9 +48,13 @@ static void GiveItem_SelectItemQuantity(u8 taskId);
 static void GiveItem_DestroySelectItem(u8 taskId);
 
 static void DebugAction_HealParty(u8 taskId);
+
 static void DebugAction_AccessPC(u8 taskId);
+
 static void DebugAction_GivePokemon(u8 taskId);
+
 static void DebugAction_Cancel(u8);
+
 static void DebugTask_HandleMainMenuInput(u8);
 
 enum {
@@ -221,12 +237,33 @@ static void DebugTask_HandleMainMenuInput(u8 taskId)
 static void DebugAction_Flags(u8 taskId)
 {
 }
+static void Flags_SelectFlag(u8 taskId)
+{
+}
+static void Flags_ToggleFlag(u8 taskId)
+{
+}
 
 static void DebugAction_Variables(u8 taskId)
 {
 }
+static void Variables_SelectVariable(u8 taskId)
+{
+}
+static void Variables_SetVariableValue(u8 taskId)
+{
+}
 
 static void DebugAction_WarpToMap(u8 taskId)
+{
+}
+static void WarpToMap_SelectMapBank(u8 taskId)
+{
+}
+static void WarpToMap_SelectMap(u8 taskId)
+{
+}
+static void WarpToMap_SelectWarp(u8 taskId)
 {
 }
 
@@ -400,6 +437,9 @@ static void DebugAction_HealParty(u8 taskId)
 
 static void DebugAction_AccessPC(u8 taskId)
 {
+    Debug_DestroyMainMenu(taskId);
+    PlaySE(SE_PC_ON);
+    ScriptContext1_SetupScript(EventScript_PC);
 }
 
 static void DebugAction_GivePokemon(u8 taskId)
