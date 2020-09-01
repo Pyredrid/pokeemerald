@@ -7,6 +7,7 @@
 #include "event_data.h"
 #include "event_object_movement.h"
 #include "event_scripts.h"
+#include "debug.h"  // DebugMenu
 #include "fieldmap.h"
 #include "field_control_avatar.h"
 #include "field_player_avatar.h"
@@ -130,6 +131,15 @@ void FieldGetPlayerInput(struct FieldInput *input, u16 newKeys, u16 heldKeys)
         input->dpadDirection = DIR_WEST;
     else if (heldKeys & DPAD_RIGHT)
         input->dpadDirection = DIR_EAST;
+
+    // DebugMenu (hold R and press Start to trigger)
+#if DEBUG
+    if ((heldKeys & R_BUTTON) && input->pressedStartButton)
+    {
+        input->input_field_1_2 = TRUE;
+        input->pressedStartButton = FALSE;
+    }
+#endif
 }
 
 int ProcessPlayerFieldInput(struct FieldInput *input)
@@ -189,6 +199,15 @@ int ProcessPlayerFieldInput(struct FieldInput *input)
     if (input->pressedSelectButton && UseRegisteredKeyItemOnField() == TRUE)
         return TRUE;
 
+// DebugMenu
+#if DEBUG
+    if (input->input_field_1_2)
+    {
+        PlaySE(SE_WIN_OPEN);
+        Debug_ShowMainMenu();
+        return TRUE;
+    }
+#endif
     return FALSE;
 }
 
