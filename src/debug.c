@@ -1,6 +1,7 @@
 #if DEBUG
 
 #include "global.h"
+#include "event_data.h"
 #include "event_object_movement.h"
 #include "event_scripts.h"
 #include "international_string_util.h"
@@ -23,7 +24,12 @@
 #define DEBUG_MAIN_MENU_HEIGHT 7
 
 #define DEBUG_NUMBER_DISPLAY_WIDTH 10
-#define DEBUG_NUMBER_DISPLAY_HEIGHT 3
+#define DEBUG_NUMBER_DISPLAY_HEIGHT 4
+
+#define DEBUG_NUMBER_DIGITS_FLAGS 5
+#define DEBUG_NUMBER_DIGITS_VARIABLES 5
+#define DEBUG_NUMBER_DIGITS_ITEMS 4
+#define DEBUG_NUMBER_DIGITS_ITEM_QUANTITY 2
 
 void Debug_ShowMainMenu(void);
 
@@ -32,6 +38,7 @@ static void Debug_DestroyMainMenu(u8);
 static void DebugAction_Flags(u8 taskId);
 static void Flags_SelectFlag(u8 taskId);
 static void Flags_ToggleFlag(u8 taskId);
+static void Flags_DestroySelectFlag(u8 taskId);
 
 static void DebugAction_Variables(u8 taskId);
 static void Variables_SelectVariable(u8 taskId);
@@ -77,17 +84,24 @@ static const u8 gDebugText_AccessPC[] =         _("Access PC");
 static const u8 gDebugText_GivePokemon[] =      _("Give Pokemon");
 static const u8 gDebugText_Cancel[] =           _("Cancel");
 
-static const u8 gText_ItemQuantity[] =  _("  Quantity:       \n  {STR_VAR_1}    \n{STR_VAR_2}");
-static const u8 gText_ItemID[] =        _("Item ID: {STR_VAR_3}\n{STR_VAR_1}    \n{STR_VAR_2}");
+static const u8 gText_Flag[] =          _("  Flag: {STR_VAR_1}   \n  Is Set? {STR_VAR_2} \n{A_BUTTON}: Toggle Flag\n{STR_VAR_3}");
+static const u8 gText_FlagSet[] =       _("TRUE");
+static const u8 gText_FlagUnset[] =     _("FALSE");
 
-static const u8 digitInidicator_1[] =               _("{LEFT_ARROW}x1{RIGHT_ARROW}        ");
-static const u8 digitInidicator_10[] =              _("{LEFT_ARROW}x10{RIGHT_ARROW}       ");
-static const u8 digitInidicator_100[] =             _("{LEFT_ARROW}x100{RIGHT_ARROW}      ");
-static const u8 digitInidicator_1000[] =            _("{LEFT_ARROW}x1000{RIGHT_ARROW}     ");
-static const u8 digitInidicator_10000[] =           _("{LEFT_ARROW}x10000{RIGHT_ARROW}    ");
-static const u8 digitInidicator_100000[] =          _("{LEFT_ARROW}x100000{RIGHT_ARROW}   ");
-static const u8 digitInidicator_1000000[] =         _("{LEFT_ARROW}x1000000{RIGHT_ARROW}  ");
-static const u8 digitInidicator_10000000[] =        _("{LEFT_ARROW}x10000000{RIGHT_ARROW} ");
+static const u8 gText_Variable[] =  _("  Variable:       \n  {STR_VAR_1}    \n\n{STR_VAR_2}");
+static const u8 gText_VariableValueSet[] =  _("  Variable: {STR_VAR_1}\n Value: {STR_VAR_1}    \n\n{STR_VAR_2}");
+
+static const u8 gText_ItemQuantity[] =  _("  Quantity:       \n  {STR_VAR_1}    \n\n{STR_VAR_2}");
+static const u8 gText_ItemID[] =        _("Item ID: {STR_VAR_3}\n{STR_VAR_1}    \n\n{STR_VAR_2}");
+
+static const u8 digitInidicator_1[] =               _("{LEFT_ARROW}+1{RIGHT_ARROW}        ");
+static const u8 digitInidicator_10[] =              _("{LEFT_ARROW}+10{RIGHT_ARROW}       ");
+static const u8 digitInidicator_100[] =             _("{LEFT_ARROW}+100{RIGHT_ARROW}      ");
+static const u8 digitInidicator_1000[] =            _("{LEFT_ARROW}+1000{RIGHT_ARROW}     ");
+static const u8 digitInidicator_10000[] =           _("{LEFT_ARROW}+10000{RIGHT_ARROW}    ");
+static const u8 digitInidicator_100000[] =          _("{LEFT_ARROW}+100000{RIGHT_ARROW}   ");
+static const u8 digitInidicator_1000000[] =         _("{LEFT_ARROW}+1000000{RIGHT_ARROW}  ");
+static const u8 digitInidicator_10000000[] =        _("{LEFT_ARROW}+10000000{RIGHT_ARROW} ");
 const u8 * const gText_DigitIndicator[] =
 {
     digitInidicator_1,
@@ -236,13 +250,123 @@ static void DebugTask_HandleMainMenuInput(u8 taskId)
 
 static void DebugAction_Flags(u8 taskId)
 {
+    u8 windowId;
+
+    ClearStdWindowAndFrame(gTasks[taskId].data[1], TRUE);
+    RemoveWindow(gTasks[taskId].data[1]);
+
+    HideMapNamePopUpWindow();
+    LoadMessageBoxAndBorderGfx();
+    windowId = AddWindow(&sDebugNumberDisplayWindowTemplate);
+    DrawStdWindowFrame(windowId, FALSE);
+
+    CopyWindowToVram(windowId, 3);
+
+    //Display initial Flag
+    if(FlagGet(0) == TRUE)
+    {
+        StringCopyPadded(gStringVar2, gText_FlagSet, CHAR_SPACE, 15);
+    }
+    else
+    {
+        StringCopyPadded(gStringVar2, gText_FlagUnset, CHAR_SPACE, 15);
+    }
+    StringCopy(gStringVar3, gText_DigitIndicator[0]);
+    ConvertIntToDecimalStringN(gStringVar1, 0, STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_FLAGS);
+    StringExpandPlaceholders(gStringVar4, gText_Flag);
+
+    AddTextPrinterParameterized(windowId, 1, gStringVar4, 1, 1, 0, NULL);
+
+    gTasks[taskId].func = Flags_SelectFlag;
+    gTasks[taskId].data[2] = windowId;
+    gTasks[taskId].data[3] = 0;            //Current Flag
+    gTasks[taskId].data[4] = 0;            //Digit Selected
 }
+
 static void Flags_SelectFlag(u8 taskId)
 {
+    if (gMain.newKeys & A_BUTTON)
+    {
+        //Toggle Flag
+        if(FlagGet(gTasks[taskId].data[3]) == TRUE)
+        {
+            FlagClear(gTasks[taskId].data[3]);
+        }
+        else
+        {
+            FlagSet(gTasks[taskId].data[3]);
+        }
+    }
+    else if (gMain.newKeys & B_BUTTON)
+    {
+        PlaySE(SE_SELECT);
+        Flags_DestroySelectFlag(taskId);
+        return;
+    }
+
+    if(gMain.newKeys & DPAD_UP)
+    {
+        PlaySE(SE_SELECT);
+        gTasks[taskId].data[3] += sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] >= FLAGS_COUNT){
+            gTasks[taskId].data[3] = FLAGS_COUNT - 1;
+        }
+    }
+    if(gMain.newKeys & DPAD_DOWN)
+    {
+        PlaySE(SE_SELECT);
+        gTasks[taskId].data[3] -= sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] < 0){
+            gTasks[taskId].data[3] = 0;
+        }
+    }
+    if(gMain.newKeys & DPAD_LEFT)
+    {
+        PlaySE(SE_SELECT);
+        if(gTasks[taskId].data[4] > 0)
+        {
+            gTasks[taskId].data[4] -= 1;
+        }
+    }
+    if(gMain.newKeys & DPAD_RIGHT)
+    {
+        PlaySE(SE_SELECT);
+        if(gTasks[taskId].data[4] < 3)
+        {
+            gTasks[taskId].data[4] += 1;
+        }
+    }
+
+    if (gMain.newKeys & DPAD_ANY || gMain.newKeys & A_BUTTON)
+    {
+        if(FlagGet(gTasks[taskId].data[3]) == TRUE)
+        {
+            StringCopyPadded(gStringVar2, gText_FlagSet, CHAR_SPACE, 15);
+        }
+        else
+        {
+            StringCopyPadded(gStringVar2, gText_FlagUnset, CHAR_SPACE, 15);
+        }
+        StringCopy(gStringVar3, gText_DigitIndicator[gTasks[taskId].data[4]]);
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_FLAGS);
+        StringExpandPlaceholders(gStringVar4, gText_Flag);
+
+        AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
+    }
 }
-static void Flags_ToggleFlag(u8 taskId)
+static void Flags_DestroySelectFlag(u8 taskId)
 {
+
+    ClearStdWindowAndFrame(gTasks[taskId].data[1], TRUE);
+    RemoveWindow(gTasks[taskId].data[1]);
+
+    ClearStdWindowAndFrame(gTasks[taskId].data[2], TRUE);
+    RemoveWindow(gTasks[taskId].data[2]);
+
+    DestroyTask(taskId);
+    EnableBothScriptContexts();
 }
+
 
 static void DebugAction_Variables(u8 taskId)
 {
@@ -283,7 +407,7 @@ static void DebugAction_GiveItem(u8 taskId)
 
     //Display initial ID
     StringCopy(gStringVar2, gText_DigitIndicator[0]);
-    ConvertIntToDecimalStringN(gStringVar3, 1, STR_CONV_MODE_LEADING_ZEROS, 4);
+    ConvertIntToDecimalStringN(gStringVar3, 1, STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_ITEMS);
     CopyItemName(1, gStringVar1);
     StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
     StringExpandPlaceholders(gStringVar4, gText_ItemID);
@@ -323,7 +447,7 @@ static void GiveItem_SelectItemId(u8 taskId)
         }
         if(gMain.newKeys & DPAD_RIGHT)
         {
-            if(gTasks[taskId].data[4] < 3)
+            if(gTasks[taskId].data[4] < DEBUG_NUMBER_DIGITS_ITEMS-1)
             {
                 gTasks[taskId].data[4] += 1;
             }
@@ -332,7 +456,7 @@ static void GiveItem_SelectItemId(u8 taskId)
         StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
         CopyItemName(gTasks[taskId].data[3], gStringVar1);
         StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
-        ConvertIntToDecimalStringN(gStringVar3, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, 4);
+        ConvertIntToDecimalStringN(gStringVar3, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_ITEMS);
         StringExpandPlaceholders(gStringVar4, gText_ItemID);
 
         AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
@@ -345,7 +469,7 @@ static void GiveItem_SelectItemId(u8 taskId)
         gTasks[taskId].data[4] = 0;
 
         StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
-        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, 2);
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_ITEM_QUANTITY);
         StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
         StringExpandPlaceholders(gStringVar4, gText_ItemQuantity);
         AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
@@ -395,7 +519,7 @@ static void GiveItem_SelectItemQuantity(u8 taskId)
         }
 
         StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
-        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, 2);
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_ITEM_QUANTITY);
         StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
         StringExpandPlaceholders(gStringVar4, gText_ItemQuantity);
 
