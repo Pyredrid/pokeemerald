@@ -28,6 +28,7 @@
 
 #define DEBUG_NUMBER_DIGITS_FLAGS 5
 #define DEBUG_NUMBER_DIGITS_VARIABLES 5
+#define DEBUG_NUMBER_DIGITS_VARIABLE_VALUE 5
 #define DEBUG_NUMBER_DIGITS_ITEMS 4
 #define DEBUG_NUMBER_DIGITS_ITEM_QUANTITY 2
 
@@ -43,6 +44,7 @@ static void Flags_DestroySelectFlag(u8 taskId);
 static void DebugAction_Variables(u8 taskId);
 static void Variables_SelectVariable(u8 taskId);
 static void Variables_SetVariableValue(u8 taskId);
+static void Variables_DestroySelectVariable(u8 taskId);
 
 static void DebugAction_WarpToMap(u8 taskId);
 static void WarpToMap_SelectMapBank(u8 taskId);
@@ -88,8 +90,8 @@ static const u8 gText_Flag[] =          _("  Flag: {STR_VAR_1}   \n  Is Set? {ST
 static const u8 gText_FlagSet[] =       _("TRUE");
 static const u8 gText_FlagUnset[] =     _("FALSE");
 
-static const u8 gText_Variable[] =  _("  Variable:       \n  {STR_VAR_1}    \n\n{STR_VAR_2}");
-static const u8 gText_VariableValueSet[] =  _("  Variable: {STR_VAR_1}\n Value: {STR_VAR_1}    \n\n{STR_VAR_2}");
+static const u8 gText_Variable[] =  _("  Variable:       \n  {STR_VAR_1}    \nValue: {STR_VAR_3}\n{STR_VAR_2}");
+static const u8 gText_VariableValueSet[] =  _("  Variable: {STR_VAR_3}\n Value: {STR_VAR_1}    \n{A_BUTTON} to set value     \n{STR_VAR_2}");
 
 static const u8 gText_ItemQuantity[] =  _("  Quantity:       \n  {STR_VAR_1}    \n\n{STR_VAR_2}");
 static const u8 gText_ItemID[] =        _("Item ID: {STR_VAR_3}\n{STR_VAR_1}    \n\n{STR_VAR_2}");
@@ -323,17 +325,19 @@ static void Flags_SelectFlag(u8 taskId)
     if(gMain.newKeys & DPAD_LEFT)
     {
         PlaySE(SE_SELECT);
-        if(gTasks[taskId].data[4] > 0)
+        gTasks[taskId].data[4] -= 1;
+        if(gTasks[taskId].data[4] < 0)
         {
-            gTasks[taskId].data[4] -= 1;
+            gTasks[taskId].data[4] = 0;
         }
     }
     if(gMain.newKeys & DPAD_RIGHT)
     {
         PlaySE(SE_SELECT);
-        if(gTasks[taskId].data[4] < 3)
+        gTasks[taskId].data[4] += 1;
+        if(gTasks[taskId].data[4] > DEBUG_NUMBER_DIGITS_FLAGS-1)
         {
-            gTasks[taskId].data[4] += 1;
+            gTasks[taskId].data[4] = DEBUG_NUMBER_DIGITS_FLAGS-1;
         }
     }
 
@@ -370,25 +374,204 @@ static void Flags_DestroySelectFlag(u8 taskId)
 
 static void DebugAction_Variables(u8 taskId)
 {
+    u8 windowId;
+
+    ClearStdWindowAndFrame(gTasks[taskId].data[1], TRUE);
+    RemoveWindow(gTasks[taskId].data[1]);
+
+    HideMapNamePopUpWindow();
+    LoadMessageBoxAndBorderGfx();
+    windowId = AddWindow(&sDebugNumberDisplayWindowTemplate);
+    DrawStdWindowFrame(windowId, FALSE);
+
+    CopyWindowToVram(windowId, 3);
+
+    //Display initial Variable
+    //Variable:       \n  {STR_VAR_1}    \nValue: {STR_VAR_3}\n{STR_VAR_2}
+    StringCopy(gStringVar2, gText_DigitIndicator[0]);
+
+    ConvertIntToDecimalStringN(gStringVar1, 0, STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLES);
+    StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
+
+    ConvertIntToDecimalStringN(gStringVar3, VarGet(0), STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLES);
+    StringCopyPadded(gStringVar1, gStringVar3, CHAR_SPACE, 15);
+
+    StringExpandPlaceholders(gStringVar4, gText_Variable);
+
+    AddTextPrinterParameterized(windowId, 1, gStringVar4, 1, 1, 0, NULL);
+
+    gTasks[taskId].func = Variables_SelectVariable;
+    gTasks[taskId].data[2] = windowId;
+    gTasks[taskId].data[3] = 0;            //Current Variable
+    gTasks[taskId].data[4] = 0;            //Digit Selected
 }
+
 static void Variables_SelectVariable(u8 taskId)
 {
+    if(gMain.newKeys & DPAD_UP)
+    {
+        gTasks[taskId].data[3] += sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] > 32766){
+            gTasks[taskId].data[3] = 32766;
+        }
+    }
+    if(gMain.newKeys & DPAD_DOWN)
+    {
+        gTasks[taskId].data[3] -= sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] < 0){
+            gTasks[taskId].data[3] = 0;
+        }
+    }
+    if(gMain.newKeys & DPAD_LEFT)
+    {
+        gTasks[taskId].data[4] -= 1;
+        if(gTasks[taskId].data[4] < 0)
+        {
+            gTasks[taskId].data[4] = 0;
+        }
+    }
+    if(gMain.newKeys & DPAD_RIGHT)
+    {
+        gTasks[taskId].data[4] += 1;
+        if(gTasks[taskId].data[4] > DEBUG_NUMBER_DIGITS_VARIABLES-1)
+        {
+            gTasks[taskId].data[4] = DEBUG_NUMBER_DIGITS_VARIABLES-1;
+        }
+    }
+
+    if (gMain.newKeys & A_BUTTON)
+    {
+        gTasks[taskId].data[5] = gTasks[taskId].data[3];
+        gTasks[taskId].data[3] = VarGet(gTasks[taskId].data[5]);
+        gTasks[taskId].data[4] = 0;
+        gTasks[taskId].func = Variables_SetVariableValue;
+
+        //"  Variable: {STR_VAR_3}\n Value: {STR_VAR_1}    \n\n{STR_VAR_2}"
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLE_VALUE);
+        StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
+
+        StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
+
+        ConvertIntToDecimalStringN(gStringVar3, gTasks[taskId].data[5], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLE_VALUE);
+        StringCopyPadded(gStringVar3, gStringVar3, CHAR_SPACE, 15);
+
+        StringExpandPlaceholders(gStringVar4, gText_VariableValueSet);
+        AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
+    }
+    else if (gMain.newKeys & B_BUTTON)
+    {
+        PlaySE(SE_SELECT);
+        Variables_DestroySelectVariable(taskId);
+        return;
+    }
+
+    if (gMain.newKeys & DPAD_ANY)
+    {
+        PlaySE(SE_SELECT);
+
+        //Variable:       \n  {STR_VAR_1}    \nValue: {STR_VAR_3}\n{STR_VAR_2}
+        StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
+
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLES);
+        StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
+
+        ConvertIntToDecimalStringN(gStringVar3, VarGet(gTasks[taskId].data[3]), STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLES);
+        StringCopyPadded(gStringVar3, gStringVar3, CHAR_SPACE, 15);
+
+        StringExpandPlaceholders(gStringVar4, gText_Variable);
+
+        AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
+    }
 }
 static void Variables_SetVariableValue(u8 taskId)
 {
+    if(gMain.newKeys & DPAD_UP)
+    {
+        gTasks[taskId].data[3] += sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] >= 100){
+            gTasks[taskId].data[3] = 99;
+        }
+    }
+    if(gMain.newKeys & DPAD_DOWN)
+    {
+        gTasks[taskId].data[3] -= sPowersOfTen[gTasks[taskId].data[4]];
+        if(gTasks[taskId].data[3] < 0){
+            gTasks[taskId].data[3] = 0;
+        }
+    }
+    if(gMain.newKeys & DPAD_LEFT)
+    {
+        gTasks[taskId].data[4] -= 1;
+        if(gTasks[taskId].data[4] < 0)
+        {
+            gTasks[taskId].data[4] = 0;
+        }
+    }
+    if(gMain.newKeys & DPAD_RIGHT)
+    {
+        gTasks[taskId].data[4] += 1;
+        if(gTasks[taskId].data[4] > 5)
+        {
+            gTasks[taskId].data[4] = 5;
+        }
+    }
+
+    if (gMain.newKeys & A_BUTTON)
+    {
+        PlaySE(SE_SELECT);
+        VarSet(gTasks[taskId].data[5], gTasks[taskId].data[3]);
+    }
+    else if (gMain.newKeys & B_BUTTON)
+    {
+        PlaySE(SE_SELECT);
+        Variables_DestroySelectVariable(taskId);
+        return;
+    }
+
+    if (gMain.newKeys & DPAD_ANY || gMain.newKeys & A_BUTTON)
+    {
+        PlaySE(SE_SELECT);
+
+        //"  Variable: {STR_VAR_3}\n Value: {STR_VAR_1}    \n\n{STR_VAR_2}"
+        ConvertIntToDecimalStringN(gStringVar1, gTasks[taskId].data[3], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLE_VALUE);
+        StringCopyPadded(gStringVar1, gStringVar1, CHAR_SPACE, 15);
+
+        StringCopy(gStringVar2, gText_DigitIndicator[gTasks[taskId].data[4]]);
+
+        ConvertIntToDecimalStringN(gStringVar3, gTasks[taskId].data[5], STR_CONV_MODE_LEADING_ZEROS, DEBUG_NUMBER_DIGITS_VARIABLE_VALUE);
+        StringCopyPadded(gStringVar3, gStringVar3, CHAR_SPACE, 15);
+
+        StringExpandPlaceholders(gStringVar4, gText_VariableValueSet);
+        AddTextPrinterParameterized(gTasks[taskId].data[2], 1, gStringVar4, 1, 1, 0, NULL);
+    }
+}
+static void Variables_DestroySelectVariable(u8 taskId)
+{
+    ClearStdWindowAndFrame(gTasks[taskId].data[1], TRUE);
+    RemoveWindow(gTasks[taskId].data[1]);
+
+    ClearStdWindowAndFrame(gTasks[taskId].data[2], TRUE);
+    RemoveWindow(gTasks[taskId].data[2]);
+
+    DestroyTask(taskId);
+    EnableBothScriptContexts();
 }
 
 static void DebugAction_WarpToMap(u8 taskId)
 {
+    //NYI
 }
 static void WarpToMap_SelectMapBank(u8 taskId)
 {
+    //NYI
 }
 static void WarpToMap_SelectMap(u8 taskId)
 {
+    //NYI
 }
 static void WarpToMap_SelectWarp(u8 taskId)
 {
+    //NYI
 }
 
 static void DebugAction_GiveItem(u8 taskId)
@@ -568,6 +751,7 @@ static void DebugAction_AccessPC(u8 taskId)
 
 static void DebugAction_GivePokemon(u8 taskId)
 {
+    //NYI
 }
 
 static void DebugAction_Cancel(u8 taskId)
